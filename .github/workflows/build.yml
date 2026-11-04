@@ -1,0 +1,201 @@
+# Builds the shared Scaffold base images and pushes them to Docker Hub.
+#
+# Runs weekly (picks up upstream security patches), on pushes to main and on demand. Pull requests
+# build and test only: they never log in to Docker Hub, so fork PRs get no secrets.
+#
+# Repository settings required:
+#   vars.DOCKERHUB_NAMESPACE  - Docker Hub user/org; images go to <namespace>/scaffold-php and <namespace>/scaffold-caddy
+#   secrets.DOCKERHUB_USERNAME, secrets.DOCKERHUB_TOKEN - a Docker Hub access token scoped to those repositories
+name: Build base images
+
+on:
+    pull_request:
+    push:
+        branches: [main]
+    schedule:
+        - cron: "0 3 * * 1"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+env:
+    PLATFORMS: linux/amd64,linux/arm64
+    CADDY_VERSION: "2.11.7"
+    # Floor for the floating 8.5 tag; the build fails if the upstream image is older. Raise it as patch releases ship.
+    PHP_8_5_MIN_VERSION: "8.5.12"
+
+jobs:
+    php:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                php_version: ["8.4", "8.5"]
+                variant: [base, dev]
+        env:
+            IMAGE: ${{ vars.DOCKERHUB_NAMESPACE || 'local' }}/scaffold-php
+            PUSH: ${{ github.event_name != 'pull_request' }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+              if: env.PUSH == 'true'
+            - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+            # No layer cache on purpose: a cached apt layer would defeat the weekly security rebuild.
+            - name: Build (amd64) for testing
+              uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+              with:
+                  context: php
+                  target: php-${{ matrix.variant }}
+                  build-args: PHP_VERSION=${{ matrix.php_version }}
+                  load: true
+                  tags: ${{ env.IMAGE }}:test
+
+            - name: Smoke test
+              run: |
+                  modules="$(docker run --rm "$IMAGE:test" php -m)"
+                  for module in intl pdo_mysql; do
+                      echo "$modules" | grep -qix "$module" || { echo "missing PHP module: $module"; exit 1; }
+                  done
+                  if [ "${{ matrix.php_version }}" = "8.5" ]; then
+                      docker run --rm "$IMAGE:test" php -r 'exit(version_compare(PHP_VERSION, $argv[1], ">=") ? 0 : 1);' "$PHP_8_5_MIN_VERSION" \
+                          || { echo "PHP is older than $PHP_8_5_MIN_VERSION"; exit 1; }
+                  fi
+                  if [ "${{ matrix.variant }}" = "dev" ]; then
+                      echo "$modules" | grep -qix xdebug
+                      echo "$modules" | grep -qix pcov
+                      docker run --rm "$IMAGE:test" composer --version
+                  fi
+
+            - name: Resolve PHP patch version
+              id: php
+              run: echo "patch=$(docker run --rm "$IMAGE:test" php -r 'echo PHP_VERSION;')" >> "$GITHUB_OUTPUT"
+
+            - name: Scan for vulnerabilities
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  image-ref: ${{ env.IMAGE }}:test
+                  severity: CRITICAL
+                  ignore-unfixed: true
+                  exit-code: "1"
+
+            - name: Log in to Docker Hub
+              if: env.PUSH == 'true'
+              uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+            - name: Build date
+              id: date
+              run: echo "value=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+            - name: Build and push (multi-arch)
+              if: env.PUSH == 'true'
+              uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+              with:
+                  context: php
+                  target: php-${{ matrix.variant }}
+                  build-args: PHP_VERSION=${{ matrix.php_version }}
+                  platforms: ${{ env.PLATFORMS }}
+                  push: true
+                  provenance: mode=max
+                  labels: |
+                      org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+                      org.opencontainers.image.title=scaffold-php:${{ matrix.variant }}
+                      org.opencontainers.image.licenses=MIT
+                      org.opencontainers.image.url=https://buildwithscaffold.com
+                      org.opencontainers.image.authors=Chris Shennan (https://chrisshennan.com)
+                      org.opencontainers.image.description=Scaffold PHP ${{ matrix.php_version }} ${{ matrix.variant }} image
+                  sbom: true
+                  tags: |
+                      ${{ env.IMAGE }}:${{ matrix.php_version }}-${{ matrix.variant }}
+                      ${{ env.IMAGE }}:${{ steps.php.outputs.patch }}-${{ matrix.variant }}
+                      ${{ env.IMAGE }}:${{ steps.php.outputs.patch }}-${{ matrix.variant }}-${{ steps.date.outputs.value }}
+
+    caddy:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - target: caddy
+                      suffix: ""
+                    - target: caddy-route53
+                      suffix: "-route53"
+        env:
+            IMAGE: ${{ vars.DOCKERHUB_NAMESPACE || 'local' }}/scaffold-caddy
+            PUSH: ${{ github.event_name != 'pull_request' }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+              if: env.PUSH == 'true'
+            - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+            - name: Build (amd64) for testing
+              uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+              with:
+                  context: caddy
+                  target: ${{ matrix.target }}
+                  build-args: CADDY_VERSION=${{ env.CADDY_VERSION }}
+                  load: true
+                  tags: ${{ env.IMAGE }}:test
+
+            # Both variants must have Brotli; only the route53 variant may have the DNS plugin
+            - name: Smoke test
+              run: |
+                  modules="$(docker run --rm "$IMAGE:test" caddy list-modules)"
+                  echo "$modules" | grep -q http.encoders.br
+                  if [ "${{ matrix.target }}" = "caddy-route53" ]; then
+                      echo "$modules" | grep -q dns.providers.route53
+                  else
+                      ! echo "$modules" | grep -q dns.providers.route53
+                  fi
+
+            - name: Scan for vulnerabilities
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  image-ref: ${{ env.IMAGE }}:test
+                  severity: CRITICAL
+                  ignore-unfixed: true
+                  exit-code: "1"
+
+            - name: Log in to Docker Hub
+              if: env.PUSH == 'true'
+              uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+            - name: Build date
+              id: date
+              run: echo "value=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+            - name: Build and push (multi-arch)
+              if: env.PUSH == 'true'
+              uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+              with:
+                  context: caddy
+                  target: ${{ matrix.target }}
+                  build-args: CADDY_VERSION=${{ env.CADDY_VERSION }}
+                  platforms: ${{ env.PLATFORMS }}
+                  push: true
+                  provenance: mode=max
+                  labels: |
+                      org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+                      org.opencontainers.image.title=scaffold-caddy${{ matrix.suffix }}
+                      org.opencontainers.image.licenses=MIT
+                      org.opencontainers.image.url=https://buildwithscaffold.com
+                      org.opencontainers.image.authors=Chris Shennan (https://chrisshennan.com)
+                      org.opencontainers.image.description=Scaffold Caddy ${{ env.CADDY_VERSION }} image with Brotli (${{ matrix.target }})
+                  sbom: true
+                  tags: |
+                      ${{ env.IMAGE }}:${{ env.CADDY_VERSION }}${{ matrix.suffix }}
+                      ${{ env.IMAGE }}:${{ env.CADDY_VERSION }}${{ matrix.suffix }}-${{ steps.date.outputs.value }}
