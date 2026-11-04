@@ -5,13 +5,15 @@ Caddy on every build. They are rebuilt weekly to pick up upstream security patch
 
 ## Images
 
-There are two Docker Hub repositories, one per service, each with a tag per variant.
+There are two Docker Hub repositories, one per service, each with a tag per variant:
+[`chrisshennan/scaffold-php`](https://hub.docker.com/r/chrisshennan/scaffold-php) and
+[`chrisshennan/scaffold-caddy`](https://hub.docker.com/r/chrisshennan/scaffold-caddy).
 
 | Image | Tags | Contents |
 |---|---|---|
-| `chrisshennan/scaffold-php:<version>` | `8.4`, `8.5`, `8.4.27`, `8.5.12` | `php:X-fpm` + `intl`, `pdo_mysql`, OPcache, apt libs (acl, procps), production `php.ini` with `expose_php` off |
+| [`chrisshennan/scaffold-php:<version>`](https://hub.docker.com/r/chrisshennan/scaffold-php) | `8.4`, `8.5`, `8.4.27`, `8.5.12` | `php:X-fpm` + `intl`, `pdo_mysql`, OPcache, apt libs (acl, procps), production `php.ini` with `expose_php` off |
 | `chrisshennan/scaffold-php:<version>-dev` | `8.4-dev`, `8.5-dev`, `8.4.27-dev`, `8.5.12-dev` | The above + git, unzip, xdebug, pcov, Composer, development `php.ini`, `expose_php` off. **Never use in production.** |
-| `chrisshennan/scaffold-caddy:<version>` | `2.11.7` | Caddy + Brotli (cbrotli). For projects with fixed hostnames. |
+| [`chrisshennan/scaffold-caddy:<version>`](https://hub.docker.com/r/chrisshennan/scaffold-caddy) | `2.11.7` | Caddy + Brotli (cbrotli). For projects with fixed hostnames. |
 | `chrisshennan/scaffold-caddy:<version>-route53` | `2.11.7-route53` | The above + the Route 53 DNS plugin, for wildcard certificates via DNS validation |
 
 Tags:
