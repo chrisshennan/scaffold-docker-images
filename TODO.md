@@ -10,6 +10,8 @@
       Composer source install was not run because packagist is blocked in this sandbox).
 - [x] Check whether the Caddy strip flags (`XCADDY_GO_BUILD_FLAGS`) take effect. They made the binary larger (54.2 vs
       48.6 MB for the plain image), so they were removed; xcaddy's default already strips.
+- [ ] Paste `php/README.md` and `caddy/README.md` into the Docker Hub overview of `scaffold-php` and `scaffold-caddy`,
+      and set a short description on each (update the pasted text when the tags or contents change).
 
 ## First pipeline runs
 - [ ] Run the GitHub Actions workflow on a pull request (build, smoke tests and Trivy scan; nothing is pushed).
