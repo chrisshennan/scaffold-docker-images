@@ -72,6 +72,16 @@ Defined as build args with defaults:
   Check them against the latest releases and Caddy compatibility when bumping Caddy.
 - Composer is pinned to a minor version (`composer:2.11` in `php/Dockerfile`); bump it by hand.
 
+## Support policy
+
+- **Rebuilt weekly:** the newest patch of each PHP release line in the build matrix (currently 8.4 and 8.5),
+  and the Caddy version set in the workflow. Each rebuild picks up OS and library security patches.
+- **Older patch tags are frozen:** once 8.5.13 ships, `8.5.12` stays on Docker Hub as it was last built but is
+  no longer rebuilt or patched. Follow the minor tag (`8.5`, `8.5-dev`) to keep receiving patches; pin an
+  exact patch tag or a digest only if you accept updating it yourself. The same applies to older Caddy tags.
+- **Only actively supported PHP lines are built:** security-only lines (such as 8.3 at the time of writing)
+  are not included. When a line leaves the matrix its tags freeze in the same way, so move to a newer line.
+
 ## Building locally
 
 ```bash
