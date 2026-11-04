@@ -9,19 +9,20 @@ There are two Docker Hub repositories, one per service, each with a tag per vari
 
 | Image | Tags | Contents |
 |---|---|---|
-| `chrisshennan/scaffold-php:<version>-base` | `8.4-base`, `8.5-base`, `8.5.12-base`, `8.5.12-base-YYYYMMDD` | `php:X-fpm` + `intl`, `pdo_mysql`, OPcache, apt libs (acl, procps), production `php.ini` with `expose_php` off |
-| `chrisshennan/scaffold-php:<version>-dev` | same, with `-dev` | `-base` + git, unzip, xdebug, pcov, Composer, development `php.ini`, `expose_php` off. **Never use in production.** |
-| `chrisshennan/scaffold-caddy:<version>` | `2.11.7`, `2.11.7-YYYYMMDD` | Caddy + Brotli (cbrotli). For projects with fixed hostnames. |
-| `chrisshennan/scaffold-caddy:<version>-route53` | `2.11.7-route53`, `2.11.7-route53-YYYYMMDD` | The above + the Route 53 DNS plugin, for wildcard certificates via DNS validation |
+| `chrisshennan/scaffold-php:<version>` | `8.4`, `8.5`, `8.4.27`, `8.5.12` | `php:X-fpm` + `intl`, `pdo_mysql`, OPcache, apt libs (acl, procps), production `php.ini` with `expose_php` off |
+| `chrisshennan/scaffold-php:<version>-dev` | `8.4-dev`, `8.5-dev`, `8.4.27-dev`, `8.5.12-dev` | The above + git, unzip, xdebug, pcov, Composer, development `php.ini`, `expose_php` off. **Never use in production.** |
+| `chrisshennan/scaffold-caddy:<version>` | `2.11.7` | Caddy + Brotli (cbrotli). For projects with fixed hostnames. |
+| `chrisshennan/scaffold-caddy:<version>-route53` | `2.11.7-route53` | The above + the Route 53 DNS plugin, for wildcard certificates via DNS validation |
 
 Tags:
 
-- `8.5-base` follows the latest 8.5.x release (it moves to 8.5.13 and so on when that ships).
-- `8.5.12-base` stays on that PHP patch version, but is still rebuilt weekly for OS and library patches.
-- `8.5.12-base-YYYYMMDD` is one exact build. Use it, or a digest, to pin exactly.
-- Caddy tags follow the same pattern: `2.11.7` is rebuilt weekly, `2.11.7-YYYYMMDD` is one exact build.
+- `8.5` follows the latest 8.5.x release (it moves to 8.5.13 and so on when that ships). `8.5-dev` does the same.
+- `8.5.12` stays on that PHP patch version, but is still rebuilt weekly for OS and library patches.
+- Caddy tags are exact versions, rebuilt weekly for OS and library patches.
+- No tag is immutable, because every tag is rebuilt weekly. To pin an exact build, use its digest
+  (`chrisshennan/scaffold-php@sha256:...`).
 
-Pin in production, since a base image change reaches every project that follows a floating tag.
+Pin by digest in production, since a base image change reaches every project that follows a tag.
 
 Notes on the contents:
 
@@ -43,7 +44,7 @@ project-specific (`composer install`, `COPY`, asset build, config) stays in the 
 A single parameterised base lets one set of project steps build both the production and the dev image:
 
 ```dockerfile
-ARG PHP_IMAGE=chrisshennan/scaffold-php:8.5-base
+ARG PHP_IMAGE=chrisshennan/scaffold-php:8.5
 FROM ${PHP_IMAGE} AS app
 # ... composer install, COPY . /app, cache:clear, asset build ...
 # dev / CI: docker build --target app --build-arg PHP_IMAGE=chrisshennan/scaffold-php:8.5-dev .
@@ -62,7 +63,7 @@ Defined as build args with defaults:
 
 - `PHP_VERSION` (php/Dockerfile): CI builds 8.4 and 8.5, the versions in PHP's active support. Revisit the
   matrix as versions leave active support (8.4's ends at the end of 2026; check php.net/supported-versions).
-  The `8.5-base` / `8.5-dev` tags float, so weekly rebuilds pick up new minor/patch releases; CI fails if it resolves below
+  The `8.5` / `8.5-dev` tags float, so weekly rebuilds pick up new minor/patch releases; CI fails if it resolves below
   `PHP_8_5_MIN_VERSION` (8.5.12) in the workflow. Raise that as patch releases ship.
 - `CADDY_VERSION` (caddy/Dockerfile, and `CADDY_VERSION` in the workflow): 2.11.7. This is deliberately not
   the very latest release; the official Docker image for a new Caddy release can lag, so check that
@@ -78,7 +79,7 @@ docker build --target php-dev --build-arg PHP_VERSION=8.5 -t php-dev:8.5 php
 docker build --target caddy-route53 -t caddy-route53:2.11.7 caddy
 ```
 
-Dockerfile targets: `php-base`, `php-dev`, `caddy`, `caddy-route53` (published as the `-base`, `-dev`, plain and `-route53` tags). The builds need network access to Docker Hub,
+Dockerfile targets: `php-base`, `php-dev`, `caddy`, `caddy-route53` (published as the plain, `-dev` and `-route53` tags). The builds need network access to Docker Hub,
 `deb.debian.org`, `pecl.php.net`, `dl-cdn.alpinelinux.org`, `proxy.golang.org`, `sum.golang.org`,
 `storage.googleapis.com` and `github.com`.
 
