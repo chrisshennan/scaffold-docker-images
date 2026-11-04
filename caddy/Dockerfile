@@ -36,7 +36,8 @@ RUN xcaddy build v${CADDY_VERSION} \
 
 FROM caddy:${CADDY_VERSION}-alpine AS runtime-base
 
-RUN apk add --no-cache brotli-libs
+# The upstream image already ships brotli-libs, so upgrade to pick up security fixes published since it was built
+RUN apk upgrade --no-cache && apk add --no-cache brotli-libs
 
 # Each variant is assembled, then flattened into a single layer. Copying the custom binary over the one in
 # the official image would otherwise leave the original binary behind in a lower layer (~55 MB of dead weight).
