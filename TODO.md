@@ -5,7 +5,7 @@
 - [x] Create the Docker Hub repositories `chrisshennan/scaffold-php` and `chrisshennan/scaffold-caddy`.
 - [x] Create a Docker Hub access token (Read & Write, scoped to those two repositories if the plan allows).
 - [x] Set the `DOCKERHUB_NAMESPACE` repository variable and the `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets.
-- [x] Rebuild and re-check the PHP 8.4 images (`-base`, `-dev`) after `expose_php = Off` was added.
+- [x] Rebuild and re-check the PHP 8.4 images (base, `-dev`) after `expose_php = Off` was added.
 - [x] Check `git` over HTTPS works inside the `-dev` image (`git ls-remote` against github.com works; a full
       Composer source install was not run because packagist is blocked in this sandbox).
 - [x] Check whether the Caddy strip flags (`XCADDY_GO_BUILD_FLAGS`) take effect. They made the binary larger (54.2 vs
@@ -21,6 +21,8 @@
 - [ ] Switch noticeboards.info's `Dockerfile` and `compose.yaml` over to the published images.
 
 ## Later
+- [ ] Delete the old tags from Docker Hub (`*-base`, and every `*-YYYYMMDD` tag) from the `scaffold-php` and
+      `scaffold-caddy` repositories, once nothing refers to them.
 - [ ] Revisit the PHP matrix when 8.4 leaves active support (end of 2026; confirm at php.net/supported-versions).
 - [ ] Move to Caddy 2.11.8 (or later) once its official Docker images are published, then re-check the
       re-declared runtime config in `caddy/Dockerfile`.
