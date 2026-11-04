@@ -8,11 +8,13 @@ ARG PHP_VERSION=8.5
 
 FROM php:${PHP_VERSION}-fpm AS php-base
 
+# apt-get upgrade picks up security fixes published since the upstream php image was last built.
 # - libicu-dev: Needed only to compile the intl extension; purged afterwards (the runtime libicu stays)
 # - acl: For setting filesystem permissions
 # - procps: For process management utilities
 # pdo and pdo_mysql are built against mysqlnd, so no MariaDB client library is needed.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends libicu-dev acl procps \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql intl \
     # OPcache is compiled into PHP 8.5+ but must be installed on earlier versions.
